@@ -1,6 +1,6 @@
 
 import React from 'react';
-import './QuizResults.css';
+
 
 const QuizResults = ({ results = [], quizTitle = 'Quiz Results' }) => {
   const calculateAverage = () => {
