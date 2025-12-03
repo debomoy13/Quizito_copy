@@ -23,7 +23,7 @@ const CreateQuiz = lazy(() => import('./pages/CreateQuiz'));
 const JoinQuiz = lazy(() => import('./pages/JoinQuiz'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const QuizSession = lazy(() => import('./QuizSession'));
+const QuizSession = lazy(() => import('./pages/QuizSession'));
 const Auth = lazy(() => import('./pages/Auth'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyQuizzes = lazy(() => import('./pages/MyQuizzes'));
