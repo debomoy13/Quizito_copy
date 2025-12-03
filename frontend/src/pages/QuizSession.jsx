@@ -1,7 +1,7 @@
 // src/QuizSession.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuiz } from './components/QuizContext';
+import { useQuiz } from "../QuizContext";
 import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
 import toast from 'react-hot-toast';
