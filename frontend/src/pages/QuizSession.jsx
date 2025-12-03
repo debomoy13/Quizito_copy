@@ -357,18 +357,18 @@ const QuizSession = () => {
     };
   };
 
-  // Render loading state
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" color="indigo" />
-          <h2 className="text-2xl font-bold text-gray-800 mt-4">Connecting to Quiz...</h2>
-          <p className="text-gray-600 mt-2">Please wait while we establish connection</p>
-        </div>
+  // Replace this in QuizSession.jsx when checking connection
+if (!isConnected) {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <h2 className="text-xl font-semibold">Connecting to quiz...</h2>
+        <p className="text-gray-600 mt-2">Please wait while we connect you</p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Render quiz results
   if (quizStatus === 'completed' && quizResults) {
