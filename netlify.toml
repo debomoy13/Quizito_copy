@@ -1,18 +1,13 @@
-# frontend/netlify.toml
+# netlify.toml (in repository root)
 [build]
   base = "frontend"
-  publish = "dist"
-  command = "npm run build"
+  publish = "frontend/dist"
+  command = "npm install && npm run build"
 
 [build.environment]
-NODE_VERSION = "20.19.0"
+  NODE_VERSION = "18.17.0"
+  NPM_FLAGS = "--legacy-peer-deps"
   NODE_ENV = "production"
-
-[context.production.environment]
-  NODE_ENV = "production"
-
-[context.deploy-preview.environment]
-  NODE_ENV = "development"
 
 [[redirects]]
   from = "/*"
