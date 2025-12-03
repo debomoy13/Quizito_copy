@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+
 import { Toaster } from 'react-hot-toast';
 import { QuizProvider } from './components/QuizContext';
 import { AnimatePresence } from 'framer-motion';
