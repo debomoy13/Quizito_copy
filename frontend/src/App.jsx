@@ -17,6 +17,7 @@ const Auth = lazy(() => import('./pages/Auth'));
 // Layout Components
 import Header from './components/Header';
 import Footer from './components/Footer';
+import Sidebar from './components/Sidebar';
 import LoadingSpinner from './components/LoadingSpinner';
 import NotificationCenter from './components/NotificationCenter';
 
