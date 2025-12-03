@@ -317,6 +317,7 @@ Submit your ideas in the discussions section!
   
 **Made with ❤️ by the TEAMTECHTONIC**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/quizito&type=Date)](https://star-history.com/#yourusername/quizito&Date)
+## Star History
 
+[![Star History Chart](https://api.star-history.com/svg?repos=Team-TechTonics/Quizito&type=date&legend=top-left)](https://www.star-history.com/#Team-TechTonics/Quizito&type=date&legend=top-left)
 </div>
