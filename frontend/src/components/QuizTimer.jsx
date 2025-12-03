@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import './QuizTimer.css';
 
 const QuizTimer = ({ duration = 60, onTimeUp, isPaused = false }) => {
   const [timeLeft, setTimeLeft] = useState(duration);
