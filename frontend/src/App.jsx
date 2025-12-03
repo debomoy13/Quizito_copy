@@ -18,7 +18,6 @@ const Auth = lazy(() => import('./pages/Auth'));
 import Header from './components/Header';
 import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
-import Sidebar from './components/Sidebar';
 import NotificationCenter from './components/NotificationCenter';
 
 // Loading fallback component
