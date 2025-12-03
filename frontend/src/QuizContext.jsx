@@ -8,7 +8,11 @@ const QuizContext = createContext();
 
 // Create axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://quizito-backend.onrender.com/api',
+  timeout: 10000, // 10 seconds timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 // Add token to requests if it exists
@@ -39,12 +43,13 @@ export const QuizProvider = ({ children }) => {
   useEffect(() => {
     if (!token) return;
 
-    const newSocket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
-      transports: ['websocket'],
-      auth: {
-        token: token
-      }
-    });
+    const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'https://quizito-backend.onrender.com/api',
+  timeout: 10000, // 10 seconds timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
     newSocket.on('connect', () => {
       setIsConnected(true);
