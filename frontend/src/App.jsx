@@ -16,6 +16,8 @@ import Leaderboard from './pages/Leaderboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Navbar from './components/Navbar';
 import './index.css';
+// Add this to your routes in App.jsx
+<Route path="/debug" element={<BackendTest />} />
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
