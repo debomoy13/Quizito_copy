@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './Participants.css';
 
 const Participants = ({ participants = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
