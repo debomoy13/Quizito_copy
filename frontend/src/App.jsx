@@ -1,128 +1,268 @@
 // src/App.jsx
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { QuizProvider } from './QuizContext';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-
-// Pages
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Profile from './pages/Profile';
-import CreateQuiz from './pages/CreateQuiz';
-import JoinQuiz from './pages/JoinQuiz';
-import QuizSession from './pages/QuizSession';
-import Leaderboard from './pages/Leaderboard';
-import AdminDashboard from './pages/AdminDashboard';
-import Navbar from './components/Navbar';
+import { QuizProvider } from './components/QuizContext';
 import './index.css';
+
+// Lazy load components for better performance
+const Home = lazy(() => import('./pages/Home'));
+const CreateQuiz = lazy(() => import('./pages/CreateQuiz'));
+const JoinQuiz = lazy(() => import('./pages/JoinQuiz'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const QuizSession = lazy(() => import('./QuizSession'));
+const Auth = lazy(() => import('./pages/Auth'));
+
+// Layout Components
+import Header from './components/Header';
+import Footer from './components/Footer';
+import LoadingSpinner from './components/LoadingSpinner';
+import Sidebar from './components/Sidebar';
+import NotificationCenter from './components/NotificationCenter';
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+    <LoadingSpinner size="lg" />
+  </div>
+);
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const user = JSON.parse(localStorage.getItem('quizito_user'));
   const token = localStorage.getItem('quizito_token');
   
-  if (!user || !token) {
-    return <Navigate to="/login" replace />;
+  if (!token) {
+    return <Navigate to="/auth" replace />;
   }
   
   return children;
 };
 
-function App() {
-  const pageVariants = {
-    initial: { opacity: 0, y: 20 },
-    in: { opacity: 1, y: 0 },
-    out: { opacity: 0, y: -20 }
-  };
+// Admin Route Component
+const AdminRoute = ({ children }) => {
+  const token = localStorage.getItem('quizito_token');
+  const user = JSON.parse(localStorage.getItem('quizito_user') || '{}');
+  
+  if (!token) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+};
 
-  const pageTransition = {
-    type: "tween",
-    ease: "anticipate",
-    duration: 0.5
-  };
+// Main Layout Component
+const MainLayout = ({ children }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      
+      <Header 
+        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+        onNotificationsClick={() => setNotificationsOpen(!notificationsOpen)}
+      />
+      
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      
+      <NotificationCenter 
+        isOpen={notificationsOpen} 
+        onClose={() => setNotificationsOpen(false)} 
+      />
+      
+      <main className="pt-16 pb-8 px-4 md:px-6 lg:px-8">
+        <Suspense fallback={<PageLoader />}>
+          {children}
+        </Suspense>
+      </main>
+      
+      <Footer />
+    </div>
+  );
+};
+
+// Dashboard Layout Component
+const DashboardLayout = ({ children }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <Toaster position="top-right" />
+      
+      <div className="flex h-screen">
+        {/* Sidebar for desktop */}
+        <div className="hidden md:flex md:w-64 md:flex-col">
+          <Sidebar isOpen={true} variant="dashboard" />
+        </div>
+        
+        {/* Mobile sidebar */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-50 flex md:hidden">
+            <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+            <div className="relative flex w-full max-w-xs flex-1 flex-col bg-gray-900">
+              <Sidebar isOpen={true} onClose={() => setSidebarOpen(false)} variant="dashboard" />
+            </div>
+          </div>
+        )}
+        
+        {/* Main content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="sticky top-0 z-40 bg-gray-800 pl-1 pt-1 sm:pl-3 sm:pt-3 md:hidden">
+            <button
+              type="button"
+              className="-ml-0.5 -mt-0.5 inline-flex h-12 w-12 items-center justify-center rounded-md text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <span className="sr-only">Open sidebar</span>
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+          </div>
+          
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <Suspense fallback={<PageLoader />}>
+              {children}
+            </Suspense>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function App() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  // Handle online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  // Show offline indicator
+  useEffect(() => {
+    if (!isOnline) {
+      const offlineToast = toast.custom((t) => (
+        <div className="bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg">
+          You are offline. Some features may not work properly.
+        </div>
+      ));
+    }
+  }, [isOnline]);
 
   return (
     <QuizProvider>
       <Router>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-          <Navbar />
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: '#1e293b',
-                color: '#f8fafc',
-                borderRadius: '12px',
-                border: '1px solid #334155',
-              },
-            }}
-          />
+        <Routes>
+          {/* Auth Route */}
+          <Route path="/auth" element={
+            <Suspense fallback={<PageLoader />}>
+              <Auth />
+            </Suspense>
+          } />
           
-          <AnimatePresence mode="wait">
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={
-                <motion.div key="home" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                  <Home />
-                </motion.div>
-              } />
-              <Route path="/login" element={
-                <motion.div key="login" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                  <Login />
-                </motion.div>
-              } />
-              <Route path="/register" element={
-                <motion.div key="register" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                  <Register />
-                </motion.div>
-              } />
-              <Route path="/join" element={
-                <motion.div key="join" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                  <JoinQuiz />
-                </motion.div>
-              } />
-              <Route path="/leaderboard/:sessionId" element={
-                <motion.div key="leaderboard" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                  <Leaderboard />
-                </motion.div>
-              } />
-
-              {/* Protected Routes */}
-              <Route path="/profile" element={
-                <ProtectedRoute>
-                  <motion.div key="profile" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                    <Profile />
-                  </motion.div>
-                </ProtectedRoute>
-              } />
-              <Route path="/create" element={
-                <ProtectedRoute>
-                  <motion.div key="create" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                    <CreateQuiz />
-                  </motion.div>
-                </ProtectedRoute>
-              } />
-              <Route path="/quiz/:sessionId" element={
-                <ProtectedRoute>
-                  <motion.div key="quiz" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                    <QuizSession />
-                  </motion.div>
-                </ProtectedRoute>
-              } />
-              <Route path="/admin" element={
-                <ProtectedRoute>
-                  <motion.div key="admin" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
-                    <AdminDashboard />
-                  </motion.div>
-                </ProtectedRoute>
-              } />
-
-              {/* Catch all route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AnimatePresence>
-        </div>
+          {/* Main Layout Routes */}
+          <Route path="/" element={
+            <MainLayout>
+              <Outlet />
+            </MainLayout>
+          }>
+            <Route index element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="create-quiz" element={
+              <ProtectedRoute>
+                <CreateQuiz />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="join-quiz" element={
+              <ProtectedRoute>
+                <JoinQuiz />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="leaderboard" element={
+              <ProtectedRoute>
+                <Leaderboard />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="quiz-session/:sessionId" element={
+              <ProtectedRoute>
+                <QuizSession />
+              </ProtectedRoute>
+            } />
+          </Route>
+          
+          {/* Dashboard Layout Routes */}
+          <Route path="/admin" element={
+            <DashboardLayout>
+              <Outlet />
+            </DashboardLayout>
+          }>
+            <Route index element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            } />
+          </Route>
+          
+          {/* 404 Route */}
+          <Route path="*" element={
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+              <h1 className="text-6xl font-bold text-gray-800 mb-4">404</h1>
+              <p className="text-xl text-gray-600 mb-8">Page not found</p>
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Go Home
+              </button>
+            </div>
+          } />
+        </Routes>
       </Router>
     </QuizProvider>
   );
