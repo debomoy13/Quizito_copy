@@ -2,7 +2,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { QuizProvider } from './components/QuizContext';
+import { QuizProvider } from './QuizContext';
 import './index.css';
 
 // Lazy load components for better performance
