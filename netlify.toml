@@ -1,6 +1,6 @@
 # frontend/netlify.toml
 [build]
-  base = "."
+  base = "frontend"
   publish = "dist"
   command = "npm run build"
 
