@@ -1,42 +1,46 @@
 {
   "name": "quizito-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "netlify deploy --prod"
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "axios": "^1.13.2",
-    "chart.js": "^4.2.1",
-    "framer-motion": "^10.12.16",
-    "lucide-react": "^0.263.1",
     "react": "^18.2.0",
-    "react-chartjs-2": "^5.2.0",
-    "react-confetti": "^6.1.0",
-    "react-countdown": "^2.3.5",
     "react-dom": "^18.2.0",
-    "react-hot-toast": "^2.4.0",
-    "react-icons": "^4.8.0",
-    "react-router-dom": "^6.8.1",
-    "react-spinners": "^0.13.8",
-    "socket.io-client": "^4.5.4"
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.2",
+    "socket.io-client": "^4.7.2",
+    "react-hot-toast": "^2.4.1",
+    "framer-motion": "^10.16.16",
+    "react-confetti": "^6.1.0",
+    "react-lottie": "^1.2.4",
+    "react-query": "^3.39.3",
+    "react-icons": "^4.12.0",
+    "chart.js": "^4.4.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-pdf": "^7.6.0",
+    "react-markdown": "^9.0.0",
+    "react-syntax-highlighter": "^15.5.0",
+    "uuid": "^9.0.1",
+    "dayjs": "^1.11.10",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
-    "@types/react": "^18.0.28",
-    "@types/react-dom": "^18.0.11",
-    "@vitejs/plugin-react": "^4.0.3",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "vite": "^7.2.6"
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.0.0"
   }
 }
