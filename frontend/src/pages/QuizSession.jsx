@@ -6,15 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
 import toast from 'react-hot-toast';
 
-// Import components
-import QuizQuestion from './components/QuizQuestion';
-import Leaderboard from './components/Leaderboard';
-import Chat from './components/Chat';
-import Participants from './components/Participants';
-import QuizTimer from './components/QuizTimer';
-import QuizResults from './components/QuizResults';
-import ProgressBar from './components/ProgressBar';
-import LoadingSpinner from './components/LoadingSpinner';
+import QuizQuestion from "../components/QuizQuestion";
+import Leaderboard from "../components/Leaderboard";
+import Chat from "../components/Chat";
+import Participants from "../components/Participants";
+import QuizTimer from "../components/QuizTimer";
+import QuizResults from "../components/QuizResults";
+import ProgressBar from "../components/ProgressBar";
+import LoadingSpinner from "../components/LoadingSpinner";
+
 
 const QuizSession = () => {
   const { sessionId } = useParams();
