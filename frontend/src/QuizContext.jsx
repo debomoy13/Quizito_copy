@@ -149,18 +149,24 @@ export const QuizProvider = ({ children }) => {
   }, [token]);
 
   return (
-    <QuizContext.Provider
+  <QuizContext.Provider
       value={{
         user,
         token,
         socket,
         authLoading,
         api,
+        
+        // ADD THESE
+        setUser,
+        setToken,
+
         login,
         register,
         logout,
       }}
-    >
+  >
+
       {children}
     </QuizContext.Provider>
   );
