@@ -196,8 +196,8 @@ function App() {
   }
 
   return (
-    <QuizProvider>
-      <Router>
+    <Router>
+      <QuizProvider>
         <Routes>
           {/* Public Routes */}
           <Route path="/auth" element={
@@ -274,8 +274,8 @@ function App() {
             </div>
           } />
         </Routes>
-      </Router>
-    </QuizProvider>
+      </QuizProvider>
+    </Router>
   );
 }
 
