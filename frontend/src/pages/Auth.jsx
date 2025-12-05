@@ -26,86 +26,74 @@ const Auth = () => {
     }
   }, [token, user, navigate]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      if (!form.email || !form.password || (mode === "register" && !form.name)) {
-        toast.error("Please fill in all required fields.");
-        setLoading(false);
-        return;
-      }
-
-      if (mode === "register" && form.password !== form.confirmPassword) {
-        toast.error("Passwords do not match.");
-        setLoading(false);
-        return;
-      }
-
-      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-
-      const payload =
-        mode === "login"
-          ? {
-              email: form.email,
-              password: form.password,
-            }
-          : {
-              name: form.name,
-              email: form.email,
-              password: form.password,
-            };
-
-      const res = await api.post(endpoint, payload);
-
-      if (!res.data?.success) {
-        toast.error(res.data?.message || "Authentication failed");
-        setLoading(false);
-        return;
-      }
-
-      const { token: jwt, user: userData } = res.data;
-
-      // Save to localStorage
-      localStorage.setItem("quizito_token", jwt);
-      localStorage.setItem("quizito_user", JSON.stringify(userData));
-
-      // Update context (if setters exist)
-      if (setToken) setToken(jwt);
-      if (setUser) setUser(userData);
-
-      toast.success(
-        mode === "login" ? "Logged in successfully!" : "Account created!"
-      );
-
-      // Redirect to previous page or home
-      const storedRedirect = localStorage.getItem("quizito_redirect");
-      const fromLocation =
-        location.state?.from?.pathname ||
-        storedRedirect ||
-        "/";
-
-      if (storedRedirect) {
-        localStorage.removeItem("quizito_redirect");
-      }
-
-      navigate(fromLocation, { replace: true });
-    } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        err.message ||
-        "Something went wrong. Please try again.";
-      toast.error(msg);
-    } finally {
+  try {
+    if (!form.email || !form.password || (mode === "register" && !form.name)) {
+      toast.error("Please fill all fields");
       setLoading(false);
+      return;
     }
-  };
+
+    if (mode === "register" && form.password !== form.confirmPassword) {
+      toast.error("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    // CORRECT ENDPOINTS
+    const endpoint =
+      mode === "login"
+        ? "/api/auth/login"
+        : "/api/auth/register";
+
+    // PAYLOAD MUST MATCH BACKEND!!
+    const payload =
+      mode === "login"
+        ? {
+            email: form.email,
+            password: form.password,
+          }
+        : {
+            username: form.name, // 🔥 important fix!
+            email: form.email,
+            password: form.password,
+          };
+
+    // API CALL
+    const res = await api.post(endpoint, payload);
+
+    if (!res.data?.success) {
+      toast.error(res.data?.message || "Authentication failed");
+      setLoading(false);
+      return;
+    }
+
+    const { token: jwt, user: userData } = res.data;
+
+    // SAVE TOKEN
+    localStorage.setItem("quizito_token", jwt);
+    localStorage.setItem("quizito_user", JSON.stringify(userData));
+
+    setToken(jwt);
+    setUser(userData);
+
+    toast.success(mode === "login" ? "Welcome back!" : "Account created!");
+
+    navigate("/", { replace: true });
+  } catch (err) {
+    const msg =
+      err.response?.data?.message ||
+      "Something went wrong. Try again.";
+
+    toast.error(msg);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const switchMode = () => {
     setMode((m) => (m === "login" ? "register" : "login"));
