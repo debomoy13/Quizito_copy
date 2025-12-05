@@ -278,6 +278,6 @@ function App() {
     </QuizProvider>
   );
 }
-window.safeNavigate = (path) => navigate(path);
+
 
 export default App;
