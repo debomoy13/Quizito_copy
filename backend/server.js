@@ -1,3 +1,4 @@
+console.log("MONGODB_URI ->", process.env.MONGODB_URI);
 // ========================================================
 // QUIZITO BACKEND - COMPLETE & WORKING VERSION (CLEAN FIX)
 // ========================================================
