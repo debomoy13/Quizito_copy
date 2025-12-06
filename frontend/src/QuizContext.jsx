@@ -7,10 +7,10 @@ import toast from "react-hot-toast";
 const QuizContext = createContext();
 
 // ------------------------------------------------------
-// AXIOS CLIENT
+// AXIOS CLIENT (FINAL FIXED VERSION)
 // ------------------------------------------------------
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "https://quizito-backend.onrender.com/api",
+  baseURL: "https://quizito-backend.onrender.com/api",   // FULLY CORRECT
   headers: { "Content-Type": "application/json" },
 });
 
@@ -32,26 +32,21 @@ export const QuizProvider = ({ children }) => {
   const [authLoading, setAuthLoading] = useState(false);
 
   // ------------------------------------------------------
-  // SOCKET SETUP
+  // SOCKET SETUP (FIXED)
   // ------------------------------------------------------
   useEffect(() => {
     if (!token) return;
 
-    const socketURL =
-      import.meta.env.VITE_SOCKET_URL ||
-      "https://quizito-backend.onrender.com";
-
-    const newSocket = io(socketURL, {
+    const newSocket = io("https://quizito-backend.onrender.com", {
       transports: ["websocket"],
       auth: { token },
     });
 
-    newSocket.on("connect", () => console.log("Socket Connected"));
-    newSocket.on("disconnect", () => console.log("Socket Disconnected"));
+    newSocket.on("connect", () => console.log("🔌 Socket Connected"));
+    newSocket.on("disconnect", () => console.log("❌ Socket Disconnected"));
 
-    newSocket.on("error", (msg) => toast.error(msg.message));
     newSocket.on("auth_error", () => {
-      toast.error("Session expired.");
+      toast.error("Session expired");
       logout();
     });
 
@@ -60,14 +55,13 @@ export const QuizProvider = ({ children }) => {
   }, [token]);
 
   // ------------------------------------------------------
-  // REGISTER
+  // REGISTER (FINAL)
   // ------------------------------------------------------
   const register = useCallback(async (data) => {
     setAuthLoading(true);
-
     try {
       const res = await api.post("/auth/register", {
-        username: data.username, // IMPORTANT
+        username: data.username,
         email: data.email,
         password: data.password,
       });
@@ -91,11 +85,10 @@ export const QuizProvider = ({ children }) => {
   }, []);
 
   // ------------------------------------------------------
-  // LOGIN
+  // LOGIN (FINAL)
   // ------------------------------------------------------
   const login = useCallback(async (credentials) => {
     setAuthLoading(true);
-
     try {
       const res = await api.post("/auth/login", credentials);
       const { token, user } = res.data;
@@ -149,24 +142,20 @@ export const QuizProvider = ({ children }) => {
   }, [token]);
 
   return (
-  <QuizContext.Provider
+    <QuizContext.Provider
       value={{
         user,
         token,
         socket,
-        authLoading,
         api,
-        
-        // ADD THESE
+        authLoading,
         setUser,
         setToken,
-
         login,
         register,
         logout,
       }}
-  >
-
+    >
       {children}
     </QuizContext.Provider>
   );
