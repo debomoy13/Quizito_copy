@@ -54,12 +54,24 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
+
+// Handle preflight requests
+app.options("*", cors());
 
 // SOCKET.IO with Render-safe config
 const io = socketIo(server, {
@@ -247,6 +259,14 @@ app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "🎯 Quizito Backend Running",
+    version: "1.0.0",
+    endpoints: {
+      auth: "/api/auth",
+      quizzes: "/api/quizzes",
+      ai: "/api/ai",
+      analytics: "/api/analytics",
+      media: "/api/media",
+    }
   });
 });
 
@@ -254,30 +274,49 @@ app.get("/health", (req, res) => {
   res.json({
     status: "healthy",
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    timestamp: new Date().toISOString(),
   });
 });
 
 // ---------------------------------------------------------------------------------------------
-// 9. AUTH ROUTES (REGISTER / LOGIN / VERIFY)
+// 9. AUTH ROUTES (REGISTER / LOGIN / VERIFY) - FIXED
 // ---------------------------------------------------------------------------------------------
 
 app.post("/api/auth/register", async (req, res) => {
   try {
+    console.log("Register request body:", req.body);
+    
     const { username, email, password } = req.body;
 
-    if (!username || !email || !password)
-      return res.status(400).json({ success: false, message: "All fields required" });
+    if (!username || !email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "All fields required: username, email, password" 
+      });
+    }
 
-    const existing = await User.findOne({ $or: [{ email }, { username }] });
-    if (existing)
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
-        message: "Username or email already exists",
+        message: "Invalid email format"
       });
+    }
 
+    // Check for existing user
+    const existing = await User.findOne({ $or: [{ email }, { username }] });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: existing.email === email ? "Email already exists" : "Username already taken",
+      });
+    }
+
+    // Create user
     const user = await User.create({
       username,
-      email,
+      email: email.toLowerCase(),
       password,
       profileImage: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
         username
@@ -286,46 +325,101 @@ app.post("/api/auth/register", async (req, res) => {
 
     const token = generateToken(user);
 
-    res.json({
+    // Return user without password
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(201).json({
       success: true,
+      message: "Registration successful",
       token,
-      user: { ...user.toObject(), password: undefined },
+      user: userObj,
     });
   } catch (err) {
     console.error("REGISTER ERROR:", err);
-    res.status(500).json({ success: false, message: "Registration failed" });
+    res.status(500).json({ 
+      success: false, 
+      message: "Registration failed",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ success: false, message: "Email & password required" });
+    
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Email & password required" 
+      });
+    }
 
-    const user = await User.findOne({ email });
-    if (!user || !(await user.comparePassword(password)))
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid credentials" 
+      });
+    }
+
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid credentials" 
+      });
+    }
+
+    // Update last active
+    user.stats.lastActive = new Date();
+    await user.save();
 
     const token = generateToken(user);
 
+    // Return user without password
+    const userObj = user.toObject();
+    delete userObj.password;
+
     res.json({
       success: true,
+      message: "Login successful",
       token,
-      user: { ...user.toObject(), password: undefined },
+      user: userObj,
     });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    res.status(500).json({ success: false, message: "Login failed" });
+    res.status(500).json({ 
+      success: false, 
+      message: "Login failed",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 app.get("/api/auth/verify", authenticateToken, async (req, res) => {
-  const user = await User.findById(req.user.id).select("-password");
-  if (!user)
-    return res.status(401).json({ success: false, message: "User not found" });
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: "User not found" 
+      });
+    }
 
-  res.json({ success: true, user });
+    res.json({ 
+      success: true, 
+      user,
+      message: "Token verified"
+    });
+  } catch (err) {
+    console.error("VERIFY ERROR:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Verification failed" 
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -333,23 +427,73 @@ app.get("/api/auth/verify", authenticateToken, async (req, res) => {
 // ---------------------------------------------------------------------------------------------
 
 app.get("/api/quizzes", async (req, res) => {
-  const quizzes = await Quiz.find({ isActive: true, public: true });
-  res.json({ success: true, quizzes });
+  try {
+    const quizzes = await Quiz.find({ isActive: true, public: true })
+      .populate("createdBy", "username profileImage")
+      .sort({ createdAt: -1 });
+    
+    res.json({ 
+      success: true, 
+      quizzes,
+      count: quizzes.length 
+    });
+  } catch (err) {
+    console.error("GET QUIZZES ERROR:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch quizzes" 
+    });
+  }
 });
 
 app.post("/api/quizzes", authenticateToken, async (req, res) => {
   try {
-    const quiz = await Quiz.create({ ...req.body, createdBy: req.user.id });
-    res.json({ success: true, quiz });
+    const quizData = {
+      ...req.body,
+      createdBy: req.user.id,
+      createdAt: new Date()
+    };
+    
+    const quiz = await Quiz.create(quizData);
+    
+    res.status(201).json({ 
+      success: true, 
+      message: "Quiz created successfully",
+      quiz 
+    });
   } catch (e) {
-    res.status(400).json({ success: false, message: "Quiz creation failed" });
+    console.error("CREATE QUIZ ERROR:", e);
+    res.status(400).json({ 
+      success: false, 
+      message: "Quiz creation failed",
+      error: e.message 
+    });
   }
 });
 
-app.get("/api/quizzes/:id", authenticateToken, async (req, res) => {
-  const quiz = await Quiz.findById(req.params.id);
-  if (!quiz) return res.status(404).json({ success: false, message: "Quiz not found" });
-  res.json({ success: true, quiz });
+app.get("/api/quizzes/:id", async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id)
+      .populate("createdBy", "username profileImage");
+    
+    if (!quiz) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Quiz not found" 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      quiz 
+    });
+  } catch (err) {
+    console.error("GET QUIZ BY ID ERROR:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch quiz" 
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -360,68 +504,94 @@ io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
   socket.on("join-room", async ({ roomCode, username, userId }) => {
-    const session = await Session.findOne({ roomCode });
-    if (!session) return socket.emit("error-message", "Session not found");
+    try {
+      const session = await Session.findOne({ roomCode });
+      if (!session) {
+        return socket.emit("error-message", "Session not found");
+      }
 
-    socket.join(roomCode);
+      socket.join(roomCode);
 
-    let participant = session.participants.find((p) => p.userId?.toString() === userId);
-    if (!participant) {
-      session.participants.push({ userId, username, score: 0, answers: [] });
-      await session.save();
+      let participant = session.participants.find((p) => p.userId?.toString() === userId);
+      if (!participant) {
+        session.participants.push({ userId, username, score: 0, answers: [] });
+        await session.save();
+      }
+
+      io.to(roomCode).emit("participants-update", session.participants);
+      console.log(`${username} joined room ${roomCode}`);
+    } catch (err) {
+      console.error("JOIN ROOM ERROR:", err);
+      socket.emit("error-message", "Failed to join room");
     }
-
-    io.to(roomCode).emit("participants-update", session.participants);
   });
 
   socket.on("start-quiz", async ({ roomCode }) => {
-    const session = await Session.findOne({ roomCode });
-    if (!session) return;
+    try {
+      const session = await Session.findOne({ roomCode });
+      if (!session) return;
 
-    session.status = "in-progress";
-    session.currentQuestion = 0;
-    await session.save();
+      session.status = "in-progress";
+      session.currentQuestion = 0;
+      await session.save();
 
-    io.to(roomCode).emit("quiz-started", { currentQuestion: 0 });
+      io.to(roomCode).emit("quiz-started", { 
+        currentQuestion: 0,
+        message: "Quiz started!" 
+      });
+    } catch (err) {
+      console.error("START QUIZ ERROR:", err);
+    }
   });
 
   socket.on("submit-answer", async (data) => {
-    const { roomCode, userId, username, questionIndex, correct, timeTaken } = data;
+    try {
+      const { roomCode, userId, username, questionIndex, correct, timeTaken } = data;
 
-    const session = await Session.findOne({ roomCode }).populate("quizId");
-    if (!session) return;
+      const session = await Session.findOne({ roomCode }).populate("quizId");
+      if (!session) return;
 
-    const question = session.quizId.questions[questionIndex];
-    const base = question.points || 100;
-    const speed = Math.max(0, 10 - (timeTaken || 0));
-    const earned = correct ? base + speed : 0;
+      const question = session.quizId.questions[questionIndex];
+      const base = question.points || 100;
+      const speed = Math.max(0, 10 - (timeTaken || 0));
+      const earned = correct ? base + speed : 0;
 
-    let p = session.participants.find((x) => x.userId?.toString() === userId);
-    if (!p) {
-      p = { userId, username, answers: [], score: 0 };
-      session.participants.push(p);
+      let p = session.participants.find((x) => x.userId?.toString() === userId);
+      if (!p) {
+        p = { userId, username, answers: [], score: 0 };
+        session.participants.push(p);
+      }
+
+      p.answers.push({ questionIndex, correct, timeTaken, points: earned });
+      p.score += earned;
+
+      await session.save();
+
+      const leaderboard = session.participants
+        .map((p) => ({ username: p.username, score: p.score }))
+        .sort((a, b) => b.score - a.score);
+
+      io.to(roomCode).emit("leaderboard-update", leaderboard);
+    } catch (err) {
+      console.error("SUBMIT ANSWER ERROR:", err);
     }
-
-    p.answers.push({ questionIndex, correct, timeTaken, points: earned });
-    p.score += earned;
-
-    await session.save();
-
-    const leaderboard = session.participants
-      .map((p) => ({ username: p.username, score: p.score }))
-      .sort((a, b) => b.score - a.score);
-
-    io.to(roomCode).emit("leaderboard-update", leaderboard);
   });
 
   socket.on("end-quiz", async ({ roomCode }) => {
-    const session = await Session.findOne({ roomCode }).populate("quizId");
-    if (!session) return;
+    try {
+      const session = await Session.findOne({ roomCode }).populate("quizId");
+      if (!session) return;
 
-    session.status = "finished";
-    await session.save();
+      session.status = "finished";
+      await session.save();
 
-    io.to(roomCode).emit("quiz-ended", { roomCode });
+      io.to(roomCode).emit("quiz-ended", { 
+        roomCode,
+        finalLeaderboard: session.participants.sort((a, b) => b.score - a.score)
+      });
+    } catch (err) {
+      console.error("END QUIZ ERROR:", err);
+    }
   });
 
   socket.on("disconnect", () => {
@@ -435,31 +605,55 @@ io.on("connection", (socket) => {
 
 app.post("/api/ai/generate-quiz", authenticateToken, async (req, res) => {
   try {
-    const { input, numQuestions = 10 } = req.body;
+    const { input, numQuestions = 10, category = "General", difficulty = "medium" } = req.body;
 
-    if (!input)
-      return res.status(400).json({ success: false, message: "Input required" });
+    if (!input) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Input text or topic is required" 
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: "OpenAI API key not configured"
+      });
+    }
 
     const prompt = `
-Generate ${numQuestions} multiple-choice questions about:
+You are a quiz generation expert. Create ${numQuestions} multiple-choice questions based on:
 
-${input}
+"${input}"
 
-Return strict JSON only:
+Requirements:
+1. Questions should be ${difficulty} difficulty
+2. Category: ${category}
+3. Each question should have 4 options
+4. Only one correct answer per question
+5. Include diverse question types
+
+Return a valid JSON object with this exact structure:
 {
- "title": "...",
- "category": "...",
- "questions": [
-  {
-    "question": "...",
-    "options": [
-      {"text": "...", "isCorrect": false},
-      {"text": "...", "isCorrect": true},
-      {"text": "...", "isCorrect": false},
-      {"text": "...", "isCorrect": false}
-    ]
-  }
- ]
+  "title": "Generated Quiz Title",
+  "description": "Brief description of the quiz",
+  "category": "${category}",
+  "difficulty": "${difficulty}",
+  "questions": [
+    {
+      "question": "Question text here?",
+      "type": "multiple-choice",
+      "options": [
+        {"text": "Option 1", "isCorrect": false},
+        {"text": "Option 2", "isCorrect": true},
+        {"text": "Option 3", "isCorrect": false},
+        {"text": "Option 4", "isCorrect": false}
+      ],
+      "points": 100,
+      "timeLimit": 30,
+      "difficulty": "${difficulty}"
+    }
+  ]
 }
 `;
 
@@ -472,26 +666,48 @@ Return strict JSON only:
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 2000,
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
 
     const data = await response.json();
     const raw = data.choices?.[0]?.message?.content?.trim();
 
-    const parsed = JSON.parse(raw);
+    // Clean the response (remove markdown code blocks if present)
+    const cleaned = raw.replace(/```json\n|\n```/g, '');
+    const parsed = JSON.parse(cleaned);
 
+    // Create quiz in database
     const quiz = await Quiz.create({
-      title: parsed.title,
-      category: parsed.category,
-      questions: parsed.questions,
+      title: parsed.title || `AI Generated Quiz - ${category}`,
+      description: parsed.description || `Quiz generated from: ${input.substring(0, 100)}...`,
+      category: parsed.category || category,
+      difficulty: parsed.difficulty || difficulty,
+      questions: parsed.questions.map(q => ({
+        ...q,
+        correctAnswer: q.options.find(opt => opt.isCorrect)?.text || q.options[0]?.text
+      })),
       createdBy: req.user.id,
       public: false,
     });
 
-    res.json({ success: true, quiz });
-  } catch (e) {
-    console.error("AI Error:", e);
-    res.status(500).json({ success: false, message: "AI generation failed" });
+    res.json({ 
+      success: true, 
+      message: "Quiz generated successfully",
+      quiz 
+    });
+  } catch (error) {
+    console.error("AI GENERATION ERROR:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "AI quiz generation failed",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -500,51 +716,226 @@ Return strict JSON only:
 // ---------------------------------------------------------------------------------------------
 
 app.get("/api/analytics/me", authenticateToken, async (req, res) => {
-  const results = await QuizResult.find({ userId: req.user.id }).populate("quizId");
+  try {
+    const results = await QuizResult.find({ userId: req.user.id })
+      .populate("quizId", "title category")
+      .sort({ finishedAt: -1 })
+      .limit(50);
 
-  const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id);
 
-  res.json({
-    success: true,
-    overview: user.stats,
-    results,
-  });
+    // Calculate additional stats if needed
+    const totalQuizzes = results.length;
+    const totalScore = results.reduce((sum, r) => sum + (r.score || 0), 0);
+    const averageScore = totalQuizzes > 0 ? totalScore / totalQuizzes : 0;
+
+    res.json({
+      success: true,
+      overview: {
+        ...user.stats.toObject(),
+        totalQuizzes,
+        averageScore: Math.round(averageScore * 100) / 100,
+      },
+      recentResults: results.slice(0, 10),
+      allResults: results,
+    });
+  } catch (err) {
+    console.error("ANALYTICS ERROR:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch analytics" 
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
 // 14. FILE UPLOAD (AUDIO)
 // ---------------------------------------------------------------------------------------------
 
-app.post("/api/media/audio", authenticateToken, upload.single("file"), (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ success: false, message: "File required" });
+app.post("/api/media/audio", authenticateToken, upload.single("audio"), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Audio file is required" 
+      });
+    }
 
-  res.json({
-    success: true,
-    url: `/uploads/${req.file.filename}`,
-  });
+    // Validate file type
+    const allowedTypes = ['.mp3', '.wav', '.ogg', '.m4a'];
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    
+    if (!allowedTypes.includes(ext)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid file type. Allowed: MP3, WAV, OGG, M4A"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Audio uploaded successfully",
+      url: `/uploads/${req.file.filename}`,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+  } catch (err) {
+    console.error("AUDIO UPLOAD ERROR:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to upload audio" 
+    });
+  }
 });
 
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 // ---------------------------------------------------------------------------------------------
-// 15. GLOBAL ERROR HANDLERS
+// 15. SESSION MANAGEMENT ROUTES (NEW)
 // ---------------------------------------------------------------------------------------------
 
+app.post("/api/sessions/create", authenticateToken, async (req, res) => {
+  try {
+    const { quizId } = req.body;
+    
+    if (!quizId) {
+      return res.status(400).json({
+        success: false,
+        message: "Quiz ID is required"
+      });
+    }
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Generate unique room code
+    const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const session = await Session.create({
+      quizId,
+      hostId: req.user.id,
+      roomCode,
+      participants: [],
+      status: "waiting",
+      createdAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: "Session created successfully",
+      session,
+      roomCode
+    });
+  } catch (err) {
+    console.error("CREATE SESSION ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create session"
+    });
+  }
+});
+
+app.get("/api/sessions/:roomCode", async (req, res) => {
+  try {
+    const session = await Session.findOne({ roomCode: req.params.roomCode })
+      .populate("quizId")
+      .populate("hostId", "username profileImage");
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      session
+    });
+  } catch (err) {
+    console.error("GET SESSION ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch session"
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 16. GLOBAL ERROR HANDLERS
+// ---------------------------------------------------------------------------------------------
+
+// 404 handler - MUST be after all routes
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: "Not found" });
+  console.log(`404: ${req.method} ${req.url}`);
+  res.status(404).json({ 
+    success: false, 
+    message: `Route ${req.url} not found`,
+    method: req.method,
+    availableEndpoints: {
+      auth: ["POST /api/auth/register", "POST /api/auth/login", "GET /api/auth/verify"],
+      quizzes: ["GET /api/quizzes", "POST /api/quizzes", "GET /api/quizzes/:id"],
+      ai: ["POST /api/ai/generate-quiz"],
+      sessions: ["POST /api/sessions/create", "GET /api/sessions/:roomCode"],
+      analytics: ["GET /api/analytics/me"],
+      media: ["POST /api/media/audio"]
+    }
+  });
 });
 
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error("ERROR:", err);
-  res.status(500).json({ success: false, message: "Server error" });
+  console.error("SERVER ERROR:", err);
+  
+  // Handle JSON parse errors
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Invalid JSON payload" 
+    });
+  }
+
+  // Handle Mongoose validation errors
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors).map(e => e.message);
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: messages
+    });
+  }
+
+  // Handle duplicate key errors
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern)[0];
+    return res.status(400).json({
+      success: false,
+      message: `${field} already exists`
+    });
+  }
+
+  res.status(500).json({ 
+    success: false, 
+    message: "Internal server error",
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
-// 16. START SERVER
+// 17. START SERVER
 // ---------------------------------------------------------------------------------------------
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Quizito Backend running on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Allowed Origins: ${allowedOrigins.join(', ')}`);
+});
 
 module.exports = { app, server };
