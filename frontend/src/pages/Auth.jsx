@@ -1,3 +1,4 @@
+// src/pages/Auth.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -57,6 +58,12 @@ const Auth = () => {
         return;
       }
 
+      if (mode === "register" && form.username.length < 3) {
+        toast.error("Username must be at least 3 characters");
+        setLoading(false);
+        return;
+      }
+
       // Prepare URL and data
       const url = mode === "login" 
         ? `${BASE_URL}/api/auth/login`
@@ -74,12 +81,11 @@ const Auth = () => {
           };
 
       console.log("🚀 Sending to:", url);
-      console.log("📦 Data:", data);
 
       const response = await axios.post(url, data);
       const result = response.data;
 
-      console.log("✅ Full response:", result);
+      console.log("✅ Response:", result);
 
       if (!result.success) {
         toast.error(result.message || "Authentication failed");
@@ -87,51 +93,40 @@ const Auth = () => {
         return;
       }
 
-      // Save token and user
+      // Save token and user to localStorage
       localStorage.setItem("quizito_token", result.token);
       localStorage.setItem("quizito_user", JSON.stringify(result.user));
 
       toast.success(mode === "login" ? "Logged in successfully! 🎉" : "Account created successfully! 🎉");
       
-      // **REDIRECT IMMEDIATELY**
-      window.location.href = "/";
+      // Redirect to home page WITH PAGE RELOAD
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
 
     } catch (error) {
-      console.error("❌ Full error object:", error);
-      console.error("❌ Error response:", error.response?.data);
+      console.error("❌ Error:", error);
       
       if (error.response) {
+        // Server responded with error
         const serverResponse = error.response.data;
         
         if (serverResponse.message) {
-          toast.error(`Server: ${serverResponse.message}`);
-        }
-        
-        if (serverResponse.errors && Array.isArray(serverResponse.errors)) {
-          serverResponse.errors.forEach(err => {
-            toast.error(`Validation: ${err}`);
-          });
-        }
-        
-        if (error.response.status === 400) {
-          if (serverResponse.message?.includes("already exists")) {
-            if (mode === "login") {
-              toast.error("Invalid email or password. Try registering first.");
-            } else {
-              toast.error("Email or username already taken. Try a different one.");
-            }
-          }
+          toast.error(serverResponse.message);
+        } else if (error.response.status === 400) {
+          toast.error("Bad request. Please check your input.");
         } else if (error.response.status === 401) {
-          toast.error("Invalid credentials. Please check your email and password.");
+          toast.error("Invalid email or password");
         } else if (error.response.status === 500) {
           toast.error("Server error. Please try again later.");
+        } else {
+          toast.error("Authentication failed");
         }
-        
       } else if (error.request) {
-        console.error("No response received:", error.request);
+        // No response received
         toast.error("Cannot connect to server. Check your internet connection.");
       } else {
-        console.error("Other error:", error.message);
+        // Other errors
         toast.error("Something went wrong. Please try again.");
       }
     } finally {
@@ -157,6 +152,7 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
       <div className="p-8 bg-white rounded-2xl shadow-2xl w-full max-w-md">
         
+        {/* Test connection button */}
         <button 
           onClick={handleQuickTest}
           className="mb-4 p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm w-full"
@@ -306,7 +302,12 @@ const Auth = () => {
           </p>
         </div>
 
-      
+        {/* Debug info */}
+        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-500">
+            <strong>Note:</strong> After successful login, you'll be redirected to home page.
+          </p>
+        </div>
       </div>
     </div>
   );
