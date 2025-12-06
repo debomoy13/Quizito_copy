@@ -94,7 +94,7 @@ const Auth = () => {
       toast.success(mode === "login" ? "Logged in successfully! 🎉" : "Account created successfully! 🎉");
       
       // **REDIRECT IMMEDIATELY**
-      navigate("/", { replace: true });
+      navigate("/home", { replace: true });
 
     } catch (error) {
       console.error("❌ Full error object:", error);
@@ -306,15 +306,7 @@ const Auth = () => {
           </p>
         </div>
 
-        {/* Debug info */}
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-          <p className="text-xs text-gray-500">
-            <strong>Debug Info:</strong> Sending to: {BASE_URL}/api/auth/{mode === "login" ? "login" : "register"}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            <strong>Redirects to:</strong> Home page ("/") on success
-          </p>
-        </div>
+      
       </div>
     </div>
   );
