@@ -9,10 +9,10 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
-    username: "testuser123",
-    email: "test123@example.com",
-    password: "password123",
-    confirmPassword: "password123",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const BASE_URL = "https://quizito-backend.onrender.com";
@@ -93,17 +93,14 @@ const Auth = () => {
 
       toast.success(mode === "login" ? "Logged in successfully! 🎉" : "Account created successfully! 🎉");
       
-      // Short delay before redirect
-      setTimeout(() => {
-        navigate("/");
-      }, 1000);
+      // **REDIRECT IMMEDIATELY**
+      navigate("/", { replace: true });
 
     } catch (error) {
       console.error("❌ Full error object:", error);
       console.error("❌ Error response:", error.response?.data);
       
       if (error.response) {
-        // Server responded with error
         const serverResponse = error.response.data;
         
         if (serverResponse.message) {
@@ -116,7 +113,6 @@ const Auth = () => {
           });
         }
         
-        // Common error cases
         if (error.response.status === 400) {
           if (serverResponse.message?.includes("already exists")) {
             if (mode === "login") {
@@ -132,11 +128,9 @@ const Auth = () => {
         }
         
       } else if (error.request) {
-        // No response received
         console.error("No response received:", error.request);
         toast.error("Cannot connect to server. Check your internet connection.");
       } else {
-        // Other errors
         console.error("Other error:", error.message);
         toast.error("Something went wrong. Please try again.");
       }
@@ -146,7 +140,6 @@ const Auth = () => {
   };
 
   const handleQuickTest = async () => {
-    // Test if backend is reachable
     try {
       toast.loading("Testing connection...");
       const response = await axios.get(`${BASE_URL}/health`);
@@ -164,7 +157,6 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
       <div className="p-8 bg-white rounded-2xl shadow-2xl w-full max-w-md">
         
-        {/* Test connection button */}
         <button 
           onClick={handleQuickTest}
           className="mb-4 p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm w-full"
@@ -304,7 +296,6 @@ const Auth = () => {
               className="text-blue-600 hover:text-blue-800 font-medium"
               onClick={() => {
                 setMode(mode === "login" ? "register" : "login");
-                // Reset confirm password when switching
                 if (mode === "register") {
                   setForm({...form, confirmPassword: ""});
                 }
@@ -319,6 +310,9 @@ const Auth = () => {
         <div className="mt-4 p-3 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-500">
             <strong>Debug Info:</strong> Sending to: {BASE_URL}/api/auth/{mode === "login" ? "login" : "register"}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            <strong>Redirects to:</strong> Home page ("/") on success
           </p>
         </div>
       </div>
