@@ -94,7 +94,7 @@ const Auth = () => {
       toast.success(mode === "login" ? "Logged in successfully! 🎉" : "Account created successfully! 🎉");
       
       // **REDIRECT IMMEDIATELY**
-      navigate("/home", { replace: true });
+      navigate("/", { replace: true });
 
     } catch (error) {
       console.error("❌ Full error object:", error);
