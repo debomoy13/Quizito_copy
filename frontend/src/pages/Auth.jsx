@@ -13,35 +13,41 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
-    name: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
 
+  // Handle input
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Auto redirect if already logged in
   useEffect(() => {
     if (token && user) {
       navigate("/", { replace: true });
     }
-  }, [token, user, navigate]);
+  }, [token, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (!form.email || !form.password || (mode === "register" && !form.name)) {
-        toast.error("Please fill all required fields.");
+      const username = form.username.trim();
+      const email = form.email.trim();
+      const password = form.password.trim();
+
+      if (!email || !password || (mode === "register" && !username)) {
+        toast.error("All fields are required.");
         setLoading(false);
         return;
       }
 
-      if (mode === "register" && form.password !== form.confirmPassword) {
+      if (mode === "register" && password !== form.confirmPassword.trim()) {
         toast.error("Passwords do not match.");
         setLoading(false);
         return;
@@ -51,8 +57,8 @@ const Auth = () => {
 
       const payload =
         mode === "login"
-          ? { email: form.email, password: form.password }
-          : { username: form.name, email: form.email, password: form.password };
+          ? { email, password }
+          : { username, email, password };
 
       const res = await api.post(endpoint, payload);
 
@@ -67,8 +73,8 @@ const Auth = () => {
       localStorage.setItem("quizito_token", jwt);
       localStorage.setItem("quizito_user", JSON.stringify(userData));
 
-      if (setToken) setToken(jwt);
-      if (setUser) setUser(userData);
+      setToken(jwt);
+      setUser(userData);
 
       toast.success(mode === "login" ? "Logged in!" : "Account created!");
 
@@ -140,12 +146,13 @@ const Auth = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            
             {mode === "register" && (
               <div>
-                <label className="block text-sm font-medium">Name</label>
+                <label className="block text-sm font-medium">Username</label>
                 <input
-                  name="name"
-                  value={form.name}
+                  name="username"
+                  value={form.username}
                   onChange={handleChange}
                   className="w-full px-3 py-2 rounded-lg border"
                 />
