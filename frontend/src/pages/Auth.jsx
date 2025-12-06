@@ -74,8 +74,8 @@ const Auth = () => {
 
       // Prepare request
       const endpoint = mode === "login" 
-        ? "/auth/login" 
-        : "/auth/register";
+  ? "/api/auth/login"    // ADD /api/
+  : "/api/auth/register"; // ADD /api/
 
       const payload = mode === "login"
         ? { 
