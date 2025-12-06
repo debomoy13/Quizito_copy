@@ -48,7 +48,8 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
-  "https://quizitoai.netlify.app",         // YOUR FRONTEND ✔
+  "https://quizitoai.netlify.app",
+  "https://quizitottc.netlify.app",// YOUR FRONTEND ✔
   "https://quizito-backend.onrender.com",  // YOUR BACKEND ✔
 ];
 
