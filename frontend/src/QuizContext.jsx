@@ -4,7 +4,7 @@ import axios from "axios";
 const QuizContext = createContext();
 
 export const api = axios.create({
-  baseURL: "https://quizito-backend.onrender.com/api",
+  baseURL: "https://quizito-backend.onrender.com/api/",
   headers: {
     "Content-Type": "application/json",
   },
