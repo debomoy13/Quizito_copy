@@ -1,8 +1,10 @@
+// src/components/QuizContext.jsx
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 
 const QuizContext = createContext();
 
+// Create axios instance with base URL
 export const api = axios.create({
   baseURL: "https://quizito-backend.onrender.com/api",
   headers: {
@@ -11,7 +13,7 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-// Add request interceptor for auth token
+// Add token to all requests automatically
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("quizito_token");
   if (token) {
@@ -20,7 +22,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor
+// Handle 401 errors (token expired)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -35,59 +37,43 @@ api.interceptors.response.use(
 );
 
 export const QuizProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    try {
-      const u = localStorage.getItem("quizito_user");
-      return u ? JSON.parse(u) : null;
-    } catch (error) {
-      return null;
-    }
-  });
-
-  const [token, setToken] = useState(() => localStorage.getItem("quizito_token"));
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Listen for storage changes (when Auth.jsx saves to localStorage)
+  // Load user from localStorage on mount
   useEffect(() => {
-    const handleStorageChange = () => {
+    const loadUserFromStorage = () => {
       try {
-        const newToken = localStorage.getItem("quizito_token");
-        const newUser = localStorage.getItem("quizito_user");
+        const storedToken = localStorage.getItem("quizito_token");
+        const storedUser = localStorage.getItem("quizito_user");
         
-        setToken(newToken);
-        setUser(newUser ? JSON.parse(newUser) : null);
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+        }
       } catch (error) {
-        console.error("Error parsing user data:", error);
+        console.error("Error loading user from storage:", error);
+        // Clear invalid data
+        localStorage.removeItem("quizito_token");
+        localStorage.removeItem("quizito_user");
+      } finally {
+        setLoading(false);
       }
     };
 
-    // Listen for storage events
-    window.addEventListener("storage", handleStorageChange);
-    
-    // Also check on focus (when tab becomes active)
-    window.addEventListener("focus", handleStorageChange);
-
-    // Initial load
-    handleStorageChange();
-    setLoading(false);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("focus", handleStorageChange);
-    };
+    loadUserFromStorage();
   }, []);
 
+  // Function to update auth state (called after login/register)
   const updateAuth = (newToken, newUser) => {
-    if (newToken) {
-      localStorage.setItem("quizito_token", newToken);
-    }
-    if (newUser) {
-      localStorage.setItem("quizito_user", JSON.stringify(newUser));
-    }
+    localStorage.setItem("quizito_token", newToken);
+    localStorage.setItem("quizito_user", JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
   };
 
+  // Function to logout
   const logout = () => {
     localStorage.removeItem("quizito_token");
     localStorage.removeItem("quizito_user");
@@ -96,33 +82,10 @@ export const QuizProvider = ({ children }) => {
     window.location.href = "/auth";
   };
 
-  // Check token validity on mount
-  useEffect(() => {
-    const verifyToken = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await api.get("/auth/verify");
-        if (response.data.success) {
-          setUser(response.data.user);
-        }
-      } catch (error) {
-        // Token invalid, clear it
-        logout();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    verifyToken();
-  }, [token]);
-
+  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading Quizito...</p>
@@ -139,9 +102,10 @@ export const QuizProvider = ({ children }) => {
         token,
         setUser,
         setToken,
-        updateAuth, // Add this function
+        updateAuth,
         logout,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user && !!token,
+        loading,
       }}
     >
       {children}
@@ -149,6 +113,7 @@ export const QuizProvider = ({ children }) => {
   );
 };
 
+// Custom hook to use the quiz context
 export const useQuiz = () => {
   const context = useContext(QuizContext);
   if (!context) {
