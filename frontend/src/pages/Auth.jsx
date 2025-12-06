@@ -19,7 +19,6 @@ const Auth = () => {
     confirmPassword: "",
   });
 
-  // ✔ FIXED: handleChange exists
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -50,18 +49,10 @@ const Auth = () => {
 
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
 
-      // ✔ FIXED username mismatch
       const payload =
         mode === "login"
-          ? {
-              email: form.email,
-              password: form.password,
-            }
-          : {
-              username: form.name,
-              email: form.email,
-              password: form.password,
-            };
+          ? { email: form.email, password: form.password }
+          : { username: form.name, email: form.email, password: form.password };
 
       const res = await api.post(endpoint, payload);
 
@@ -94,8 +85,6 @@ const Auth = () => {
       setLoading(false);
     }
   };
-
-  const switchMode = () => setMode((m) => (m === "login" ? "register" : "login"));
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4">
