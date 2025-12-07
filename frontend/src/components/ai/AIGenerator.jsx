@@ -58,7 +58,7 @@ const AIGenerator = ({ onGenerate, loading, setLoading }) => {
 
       if (response.data.success) {
         toast.success('Quiz generated successfully!')
-        if (onGenerate) onGenerate(response.data.quiz)
+        if (onGenerate) onGenerate(topic, numQuestions, difficulty)
       } else {
         toast.error(response.data.message || 'Failed to generate quiz')
       }
