@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuiz } from '../context/QuizContext';
+import { useAuth } from '../context/AuthContext';
 import { 
   User, Mail, Lock, Camera, Globe, Award, Trophy,
   Edit, Save, X, Calendar, TrendingUp, Shield, Bell,
@@ -9,7 +10,8 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 const Profile = () => {
-  const { user, updateProfile, changePassword, logout } = useQuiz();
+  const { user, logout } = useAuth();
+  const { updateProfile, changePassword } = useQuiz();
   const [activeTab, setActiveTab] = useState('profile');
   const [editMode, setEditMode] = useState(false);
   const [profileData, setProfileData] = useState({
