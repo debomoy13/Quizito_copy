@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuiz } from '../QuizContext';
+import { useQuiz } from '../Context/QuizContext';
 import { 
   User, Mail, Lock, Camera, Globe, Award, Trophy,
   Edit, Save, X, Calendar, TrendingUp, Shield, Bell,
