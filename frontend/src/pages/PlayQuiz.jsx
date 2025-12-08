@@ -50,7 +50,7 @@ const PlayQuiz = () => {
       localStorage.setItem('username', username);
     }
     
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:10000', {
       auth: {
         token: localStorage.getItem('token'),
         userId,
