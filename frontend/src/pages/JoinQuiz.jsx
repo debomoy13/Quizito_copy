@@ -34,7 +34,7 @@ const JoinQuiz = () => {
     }
     
     // Initialize socket
-    const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+    const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:10000', {
       auth: {
         token: localStorage.getItem('token'),
         userId: user?.id
