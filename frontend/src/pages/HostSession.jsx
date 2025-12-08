@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import { useQuiz } from '../context/QuizContext';
@@ -14,400 +14,396 @@ import '../styles/globals.css';
 const HostSession = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentQuiz, setCurrentQuiz } = useQuiz();
+  const { currentQuiz } = useQuiz();
   const socketRef = useRef(null);
   
   // Room state
   const [roomCode, setRoomCode] = useState('');
-  const [players, setPlayers] = useState([]);
+  const [participants, setParticipants] = useState([]);
   const [quizStarted, setQuizStarted] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [gameStatus, setGameStatus] = useState('lobby'); // lobby, question, feedback, ended
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [leaderboard, setLeaderboard] = useState([]);
+  const quizData = useRef(null);
   
-  // Generate room code
+  // Initialize session
   useEffect(() => {
-    const generateCode = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      let code = '';
-      for (let i = 0; i < 4; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return code;
-    };
-    
-    const code = generateCode();
-    setRoomCode(code);
-    
-    // Load quiz from context or localStorage
-    const savedQuiz = JSON.parse(localStorage.getItem('currentQuiz'));
-    if (savedQuiz) {
-      setCurrentQuiz(savedQuiz);
-    }
-    
-    // Connect to socket
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:10000', {
-      auth: {
-        token: localStorage.getItem('token'),
-        userId: user?.id,
-        username: user?.username
-      }
-    });
-    
-    socketRef.current = socket;
-    
-    // Emit host creation
-    socket.emit('create-room', {
-      roomCode: code,
-      hostId: user?.id,
-      hostName: user?.username,
-      quiz: savedQuiz || currentQuiz
-    });
-    
-    // Listen for events
-    socket.on('room-created', (data) => {
-      console.log('Room created:', data);
-      setLoading(false);
-    });
-    
-    socket.on('player-joined', (player) => {
-      setPlayers(prev => [...prev, player]);
-      // Show notification
-      NotificationCenter.add({
-        type: 'info',
-        message: `${player.username} joined the room`,
-        duration: 3000
-      });
-    });
-    
-    socket.on('player-left', (playerId) => {
-      setPlayers(prev => prev.filter(p => p.id !== playerId));
-    });
-    
-    socket.on('quiz-started', () => {
-      setQuizStarted(true);
-      setGameStatus('question');
-      // Send first question
-      sendQuestion(0);
-    });
-    
-    socket.on('all-answers-received', (data) => {
-      setGameStatus('feedback');
-      // Show results for 3 seconds
-      setTimeout(() => {
-        if (currentQuestionIndex + 1 < (savedQuiz?.questions?.length || currentQuiz?.questions?.length)) {
-          sendQuestion(currentQuestionIndex + 1);
-        } else {
-          endQuiz();
+    const initializeSession = async () => {
+      try {
+        // Get quiz from context or localStorage
+        const quiz = currentQuiz || JSON.parse(localStorage.getItem('currentQuiz'));
+        
+        if (!quiz || !quiz._id) {
+          setError('Quiz data not found. Please create or select a quiz first.');
+          setTimeout(() => navigate('/create-quiz'), 2000);
+          return;
         }
-      }, 3000);
-    });
-    
-    socket.on('error', (error) => {
-      console.error('Socket error:', error);
-      NotificationCenter.add({
-        type: 'error',
-        message: error.message || 'Connection error',
-        duration: 5000
-      });
-    });
-    
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+
+        quizData.current = quiz;
+
+        // Create session via HTTP API
+        const token = localStorage.getItem('quizito_token');
+        const createSessionResponse = await fetch('http://localhost:10000/api/sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            quizId: quiz._id,
+            settings: {
+              maxPlayers: 100,
+              questionTime: quiz.questions?.[0]?.timeLimit || 30,
+              showLeaderboard: true,
+              allowLateJoin: true
+            }
+          })
+        });
+
+        if (!createSessionResponse.ok) {
+          const errorData = await createSessionResponse.json();
+          throw new Error(errorData.message || 'Failed to create session');
+        }
+
+        const sessionData = await createSessionResponse.json();
+        const code = sessionData.session.roomCode;
+        setRoomCode(code);
+
+        // Connect to socket
+        const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:10000', {
+          reconnection: true,
+          reconnectionAttempts: 5
+        });
+
+        socketRef.current = socket;
+
+        // Authenticate socket
+        socket.emit('authenticate', {
+          token: token
+        });
+
+        socket.on('authenticated', () => {
+          console.log('Host authenticated');
+          // Join the session
+          socket.emit('join-session', {
+            roomCode: code
+          });
+        });
+
+        // Successfully joined session
+        socket.on('session-joined', (data) => {
+          console.log('Host joined session:', data);
+          setLoading(false);
+          setParticipants(data.session?.participants || []);
+        });
+
+        // Participant joined
+        socket.on('participant-joined', (data) => {
+          console.log('Participant joined:', data);
+          setParticipants(prev => {
+            const exists = prev.find(p => p.userId === data.participant.userId);
+            return exists ? prev : [...prev, data.participant];
+          });
+          NotificationCenter.add({
+            type: 'info',
+            message: `${data.participant?.username || 'A player'} joined the room`,
+            duration: 3000
+          });
+        });
+
+        // Participant left
+        socket.on('participant-left', (data) => {
+          setParticipants(prev => prev.filter(p => p.userId !== data.participantId));
+        });
+
+        // Session updated
+        socket.on('session-updated', (data) => {
+          if (data.session?.participants) {
+            setParticipants(data.session.participants);
+          }
+        });
+
+        // New question event from backend
+        socket.on('new-question', (data) => {
+          console.log('New question from server:', data);
+          setCurrentQuestion(data.question);
+          setCurrentQuestionIndex(data.questionIndex);
+          setGameStatus('question');
+          setTimeRemaining(data.question.timeLimit || 30);
+        });
+
+        // Time's up
+        socket.on('question-time-up', (data) => {
+          setGameStatus('feedback');
+          setTimeout(() => {
+            // Wait for next question from server
+            setGameStatus('lobby');
+          }, 3000);
+        });
+
+        // Quiz completed
+        socket.on('quiz-completed', () => {
+          setGameStatus('ended');
+        });
+
+        // Quiz ended
+        socket.on('quiz-ended', (data) => {
+          setGameStatus('ended');
+          setLeaderboard(data.finalLeaderboard || data.participants || []);
+          
+          setTimeout(() => {
+            navigate('/results', {
+              state: { roomCode: code, scores: data.finalLeaderboard || [] }
+            });
+          }, 3000);
+        });
+
+        // Errors
+        socket.on('error', (data) => {
+          const errorMsg = typeof data === 'string' ? data : data?.message || 'Connection error';
+          console.error('Socket error:', errorMsg);
+          NotificationCenter.add({
+            type: 'error',
+            message: errorMsg,
+            duration: 5000
+          });
+        });
+
+        return () => {
+          socket.disconnect();
+        };
+
+      } catch (err) {
+        console.error('Session initialization error:', err);
+        setError(err.message);
+        NotificationCenter.add({
+          type: 'error',
+          message: err.message,
+          duration: 5000
+        });
       }
     };
-  }, []);
-  
-  const sendQuestion = (index) => {
-    const quiz = currentQuiz || JSON.parse(localStorage.getItem('currentQuiz'));
-    if (!quiz || !quiz.questions || index >= quiz.questions.length) {
-      endQuiz();
-      return;
-    }
-    
-    setCurrentQuestionIndex(index);
-    const question = quiz.questions[index];
-    setCurrentQuestion(question);
-    setTimeRemaining(question.timeLimit || 30);
-    setGameStatus('question');
-    
-    // Send to all players
-    socketRef.current.emit('send-question', {
-      roomCode,
-      question: {
-        ...question,
-        index,
-        totalQuestions: quiz.questions.length
-      }
-    });
-    
-    // Start timer
-    startTimer(question.timeLimit || 30);
-  };
-  
-  const startTimer = (duration) => {
-    let timeLeft = duration;
-    const timer = setInterval(() => {
-      timeLeft--;
-      setTimeRemaining(timeLeft);
-      
-      if (timeLeft <= 0) {
-        clearInterval(timer);
-        // Time's up - collect answers
-        socketRef.current.emit('question-time-up', { roomCode, questionIndex: currentQuestionIndex });
-        setGameStatus('feedback');
-      }
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  };
-  
-  const endQuiz = () => {
-    setGameStatus('ended');
-    socketRef.current.emit('end-quiz', { roomCode });
-    
-    // Calculate final scores
-    const finalScores = players.map(p => ({
-      id: p.id,
-      username: p.username,
-      score: p.score || 0,
-      correctAnswers: p.correctAnswers || 0
-    })).sort((a, b) => b.score - a.score);
-    
-    setLeaderboard(finalScores);
-    
-    // Navigate to results after delay
-    setTimeout(() => {
-      navigate('/results', { state: { roomCode, scores: finalScores } });
-    }, 5000);
-  };
-  
+
+    initializeSession();
+  }, [navigate, currentQuiz]);
+
   const handleStartQuiz = () => {
-    if (players.length === 0) {
+    if (participants.length === 0) {
       NotificationCenter.add({
         type: 'warning',
-        message: 'Wait for players to join before starting',
+        message: 'Wait for at least one player to join before starting',
         duration: 3000
       });
       return;
     }
-    
+
     setQuizStarted(true);
-    socketRef.current.emit('start-quiz', { roomCode });
-  };
-  
-  const copyRoomLink = () => {
-    const link = `${window.location.origin}/join/${roomCode}`;
-    navigator.clipboard.writeText(link);
-    NotificationCenter.add({
-      type: 'success',
-      message: 'Room link copied to clipboard!',
-      duration: 2000
+    setGameStatus('question');
+    
+    // Emit start-quiz event to backend
+    socketRef.current.emit('start-quiz', {
+      roomCode
     });
   };
-  
+
+  const handleNextQuestion = () => {
+    if (!roomCode) return;
+    
+    // Backend will handle advancing to next question
+    socketRef.current.emit('next-question', {
+      roomCode
+    });
+  };
+
+  const handleEndQuiz = () => {
+    if (!roomCode) return;
+    
+    socketRef.current.emit('end-quiz', {
+      roomCode
+    });
+  };
+
   if (loading) {
-    return <LoadingSpinner message="Creating your quiz room..." />;
+    return <LoadingSpinner message="Setting up your quiz room..." />;
   }
-  
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
+        <div className="bg-red-900/20 border border-red-700 rounded-lg p-6 max-w-md">
+          <h2 className="text-red-400 font-bold mb-2">Error</h2>
+          <p className="text-gray-300">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-4 md:p-8">
-      {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 p-6 bg-gray-800/50 backdrop-blur-lg rounded-2xl border border-gray-700">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              Hosting Quiz Session
-            </h1>
-            <div className="mt-2 flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">Room Code:</span>
-                <span className="text-2xl font-bold text-cyan-300 tracking-wider">{roomCode}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">Host:</span>
-                <span className="font-medium">{user?.username}</span>
-              </div>
+        {/* Header */}
+        <div className="mb-8 p-6 bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Host Quiz Session</h1>
+              <p className="text-gray-400">
+                Room Code: <span className="text-cyan-300 font-bold text-2xl">{roomCode}</span>
+              </p>
             </div>
-          </div>
-          
-          <div className="flex gap-3 mt-4 md:mt-0">
-            <button
-              onClick={copyRoomLink}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition-all hover:scale-105"
-            >
-              📋 Copy Invite
-            </button>
-            {!quizStarted && (
-              <button
-                onClick={handleStartQuiz}
-                className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-xl font-bold transition-all hover:scale-105 shadow-lg shadow-green-500/20"
-              >
-                ▶ Start Quiz
-              </button>
-            )}
+            <div className="text-right">
+              <p className="text-gray-400 text-sm">Host: {user?.username}</p>
+              <p className="text-gray-400 text-sm">Status: {gameStatus.toUpperCase()}</p>
+            </div>
           </div>
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Panel - Players */}
-          <div className="lg:col-span-1">
-            <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">👥 Players ({players.length})</h2>
-                <div className="px-4 py-1 bg-cyan-500/20 text-cyan-300 rounded-full font-medium">
-                  {players.length} online
-                </div>
-              </div>
-              
-              <Participants players={players} />
-              
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold mb-4">📋 Quick Actions</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => navigator.clipboard.writeText(roomCode)}
-                    className="p-3 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors"
-                  >
-                    📋 Copy Code
-                  </button>
-                  <button
-                    onClick={() => window.open(`/join/${roomCode}`, '_blank')}
-                    className="p-3 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors"
-                  >
-                    🔗 Open Join Page
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            {/* Current Game Status */}
-            <div className="mt-6 bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
-              <h3 className="text-xl font-bold mb-4">🎮 Game Status</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Status</span>
-                  <span className={`font-semibold ${gameStatus === 'lobby' ? 'text-yellow-400' : gameStatus === 'question' ? 'text-green-400' : 'text-blue-400'}`}>
-                    {gameStatus.toUpperCase()}
-                  </span>
-                </div>
-                {quizStarted && (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Current Question</span>
-                      <span className="font-bold">
-                        {currentQuestionIndex + 1} / {currentQuiz?.questions?.length || 0}
-                      </span>
+
+        {!quizStarted ? (
+          // Lobby view
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Participants list */}
+            <div className="lg:col-span-2 bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
+              <h2 className="text-2xl font-bold mb-4">
+                👥 Waiting Room ({participants.length})
+              </h2>
+              <div className="space-y-3">
+                {participants.length > 0 ? (
+                  participants.map(p => (
+                    <div key={p.userId} className="flex items-center justify-between bg-gray-700/30 p-3 rounded-lg">
+                      <div>
+                        <p className="font-semibold">{p.username}</p>
+                        <p className="text-xs text-gray-400">
+                          {p.isHost ? '👑 Host' : 'Player'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-400">Status:</p>
+                        <p className="text-sm font-semibold text-green-400">{p.status}</p>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Time Remaining</span>
-                      <span className={`font-bold ${timeRemaining < 10 ? 'text-red-400' : 'text-green-400'}`}>
-                        {timeRemaining}s
-                      </span>
-                    </div>
-                  </>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-center py-8">
+                    Waiting for players to join... Share room code {roomCode}
+                  </p>
                 )}
               </div>
             </div>
+
+            {/* Start button and info */}
+            <div className="space-y-4">
+              <button
+                onClick={handleStartQuiz}
+                disabled={participants.length === 0}
+                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-all"
+              >
+                🎯 Start Quiz
+              </button>
+
+              <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
+                <h3 className="font-bold mb-4">Quiz Info</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Questions:</span>
+                    <span>{quizData.current?.questions?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Players:</span>
+                    <span>{participants.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Status:</span>
+                    <span className="text-yellow-400">Waiting</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          
-          {/* Center Panel - Question/Game */}
-          <div className="lg:col-span-2">
-            {!quizStarted ? (
-              <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-8 text-center">
-                <div className="text-6xl mb-6">🎯</div>
-                <h2 className="text-3xl font-bold mb-4">Waiting for Players</h2>
-                <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                  Share the room code with players. The quiz will begin automatically when you click "Start Quiz".
-                </p>
-                
-                <div className="max-w-md mx-auto">
-                  <div className="p-4 bg-gray-900/50 rounded-xl mb-4">
-                    <div className="text-sm text-gray-400 mb-2">Invite Link</div>
-                    <div className="flex">
-                      <input
-                        type="text"
-                        readOnly
-                        value={`${window.location.origin}/join/${roomCode}`}
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-l-lg"
-                      />
+        ) : (
+          // Quiz view
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Question display */}
+            <div className="lg:col-span-2 bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
+              {currentQuestion ? (
+                <>
+                  <div className="mb-4">
+                    <h2 className="text-xl font-bold mb-4">
+                      Q{currentQuestionIndex + 1}/{quizData.current?.questions?.length}
+                    </h2>
+                    <h3 className="text-lg mb-6">{currentQuestion.text}</h3>
+                    
+                    {currentQuestion.options && (
+                      <div className="space-y-3">
+                        {currentQuestion.options.map((option, i) => (
+                          <div
+                            key={i}
+                            className="p-3 border border-gray-600 rounded-lg hover:bg-gray-700/50 transition"
+                          >
+                            {option.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {gameStatus === 'question' && (
+                    <div className="mt-6 flex gap-2">
+                      <QuizTimer time={timeRemaining} isActive={true} />
                       <button
-                        onClick={copyRoomLink}
-                        className="px-4 bg-cyan-600 hover:bg-cyan-700 rounded-r-lg font-medium"
+                        onClick={handleNextQuestion}
+                        className="ml-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold"
                       >
-                        Copy
+                        Next Question
                       </button>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="p-4 bg-gray-900/30 rounded-xl">
-                      <div className="text-2xl font-bold text-cyan-300">{currentQuiz?.questions?.length || 0}</div>
-                      <div className="text-sm text-gray-400">Questions</div>
-                    </div>
-                    <div className="p-4 bg-gray-900/30 rounded-xl">
-                      <div className="text-2xl font-bold text-green-300">{players.length}</div>
-                      <div className="text-sm text-gray-400">Players Ready</div>
-                    </div>
-                    <div className="p-4 bg-gray-900/30 rounded-xl">
-                      <div className="text-2xl font-bold text-purple-300">
-                        {currentQuiz?.category || 'General'}
-                      </div>
-                      <div className="text-sm text-gray-400">Category</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : gameStatus === 'question' && currentQuestion ? (
-              <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-8">
-                <div className="flex justify-between items-center mb-8">
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Question {currentQuestionIndex + 1}</div>
-                    <h2 className="text-2xl font-bold">{currentQuestion.text}</h2>
-                  </div>
-                  <QuizTimer time={timeRemaining} />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                  {currentQuestion.options?.map((option, idx) => (
-                    <div key={idx} className="p-4 bg-gray-900/50 rounded-xl border border-gray-700 hover:border-cyan-500/50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 flex items-center justify-center bg-gray-800 rounded-lg font-bold">
-                          {String.fromCharCode(65 + idx)}
-                        </div>
-                        <div className="font-medium">{option.text}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="text-center text-gray-400">
-                  Players answering: {players.filter(p => p.hasAnswered).length} / {players.length}
-                </div>
-              </div>
-            ) : gameStatus === 'feedback' ? (
-              <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-8 text-center">
-                <div className="text-6xl mb-6">📊</div>
-                <h2 className="text-3xl font-bold mb-4">Question Results</h2>
-                <p className="text-gray-400 mb-8">Next question starting soon...</p>
-                <div className="inline-block px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full font-bold animate-pulse">
-                  Loading next question...
-                </div>
-              </div>
-            ) : null}
-            
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-400">Waiting for question...</p>
+              )}
+            </div>
+
             {/* Leaderboard */}
-            {players.length > 0 && (
-              <div className="mt-6">
-                <Leaderboard players={players} showHeader={true} />
+            <div className="bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700 p-6">
+              <h3 className="text-lg font-bold mb-4">📊 Scores</h3>
+              <div className="space-y-2 text-sm">
+                {participants.length > 0 ? (
+                  participants
+                    .sort((a, b) => (b.score || 0) - (a.score || 0))
+                    .map((p, i) => (
+                      <div key={p.userId} className="flex justify-between">
+                        <span>{i + 1}. {p.username}</span>
+                        <span className="font-bold text-green-400">{p.score || 0}</span>
+                      </div>
+                    ))
+                ) : (
+                  <p className="text-gray-400">No players yet</p>
+                )}
               </div>
-            )}
+
+              {quizStarted && (
+                <button
+                  onClick={handleEndQuiz}
+                  className="w-full mt-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
+                >
+                  End Quiz
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {gameStatus === 'ended' && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-lg p-8 text-center max-w-md">
+              <h2 className="text-3xl font-bold mb-4">Quiz Ended!</h2>
+              <p className="text-gray-400 mb-6">Redirecting to results...</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
