@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
     const verifyToken = async () => {
       if (token) {
         try {
-          const response = await axios.get(`${API_URL}/api/auth/verify`)
+          const response = await axios.get(`${API_URL}/api/auth/me`)
           setUser(response.data.user)
         } catch (error) {
           console.error('Token verification failed:', error)

@@ -26,8 +26,8 @@ const Footer = () => {
             <ul className="space-y-2">
               <li><Link to="/" className="text-gray-400 hover:text-white transition-colors">Home</Link></li>
               <li><Link to="/create-quiz" className="text-gray-400 hover:text-white transition-colors">Create Quiz</Link></li>
-              <li><Link to="/join-quiz" className="text-gray-400 hover:text-white transition-colors">Join Quiz</Link></li>
-              <li><Link to="/leaderboard" className="text-gray-400 hover:text-white transition-colors">Leaderboard</Link></li>
+              <li><Link to="/JoinQuiz" className="text-gray-400 hover:text-white transition-colors">Join Quiz</Link></li>
+              <li><Link to="/Leaderboard" className="text-gray-400 hover:text-white transition-colors">Leaderboard</Link></li>
             </ul>
           </div>
 
@@ -47,8 +47,8 @@ const Footer = () => {
             <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
             <ul className="space-y-2">
               <li className="text-gray-400">support@quizito.com</li>
-              <li className="text-gray-400">+1 (555) 123-4567</li>
-              <li className="text-gray-400">123 Learning St, Education City</li>
+              <li className="text-gray-400">+91 9556128887</li>
+              <li className="text-gray-400">Kattankulathur, Chennai</li>
             </ul>
           </div>
         </div>

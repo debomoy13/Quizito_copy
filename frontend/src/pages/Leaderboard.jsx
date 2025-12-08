@@ -1,10 +1,28 @@
 // src/pages/Leaderboard.jsx
-import { useParams } from 'react-router-dom';
-import { 
-  Trophy, Crown, Medal, Star, TrendingUp, Filter, Download, 
-  Share2, Globe, Clock, Zap, Target, Award, Users, Calendar
-} from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useParams } from "react-router-dom";
+import { motion } from "framer-motion";
+
+import {
+  Trophy,
+  Crown,
+  Medal,
+  Star,
+  TrendingUp,
+  Filter,
+  Download,
+  Share2,
+  Globe,
+  Clock,
+  Zap,
+  Target,
+  Award,
+  Users,
+  Calendar,
+  CheckCircle,
+  Lock,
+  BarChart3
+} from "lucide-react";
+
 
 const Leaderboard = () => {
   const { sessionId } = useParams();

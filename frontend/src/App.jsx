@@ -21,6 +21,8 @@ import PlayQuiz from './pages/PlayQuiz'
 import Results from './pages/Results'
 import Profile from './pages/Profile'
 import ProtectedRoute from './components/auth/ProtectedRoute'
+import Leaderboard from './pages/Leaderboard'
+import JoinQuiz from './pages/JoinQuiz'
 
 function App() {
   return (
@@ -32,18 +34,25 @@ function App() {
               <Navbar />
               <main className="flex-grow">
                 <Routes>
+
+                  {/* PUBLIC ROUTES */}
                   <Route path="/" element={<Home />} />
                   <Route path="/explore" element={<Explore />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/leaderboard" element={<Leaderboard />} />
                   
+
+                  {/* PROTECTED ROUTES */}
                   <Route element={<ProtectedRoute />}>
                     <Route path="/create-quiz" element={<CreateQuiz />} />
                     <Route path="/host-session" element={<HostSession />} />
                     <Route path="/play/:roomCode" element={<PlayQuiz />} />
                     <Route path="/results/:sessionId" element={<Results />} />
                     <Route path="/profile" element={<Profile />} />
+                    <Route path="/JoinQuiz" element={<JoinQuiz />} />
                   </Route>
+
                 </Routes>
               </main>
               <Footer />

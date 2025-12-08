@@ -1,0 +1,9 @@
+{"level":"warn","message":"⚠️ Redis not configured, using in-memory store","timestamp":"2025-12-08T16:00:47.575Z"}
+{"level":"warn","message":"⚠️ OpenAI not configured, AI features disabled","timestamp":"2025-12-08T16:00:47.579Z"}
+{"level":"info","message":"🚀 AI Quiz Portal Backend running on port 10000","timestamp":"2025-12-08T16:00:47.613Z"}
+{"level":"info","message":"🌐 Environment: development","timestamp":"2025-12-08T16:00:47.614Z"}
+{"level":"info","message":"🔗 CORS Origins configured for 7 origins","timestamp":"2025-12-08T16:00:47.614Z"}
+{"level":"info","message":"📡 WebSocket server ready","timestamp":"2025-12-08T16:00:47.615Z"}
+{"level":"info","message":"🤖 OpenAI: Disabled ❌","timestamp":"2025-12-08T16:00:47.616Z"}
+{"level":"info","message":"🗄️  MongoDB: Disconnected ❌","timestamp":"2025-12-08T16:00:47.616Z"}
+{"level":"info","message":"📊 Redis: Not configured ⚠️","timestamp":"2025-12-08T16:00:47.617Z"}
