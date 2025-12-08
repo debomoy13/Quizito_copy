@@ -51,7 +51,7 @@ export const QuizProvider = ({ children }) => {
   const generateAIQuiz = async (topic, numQuestions, difficulty ) => {
     setLoading(true)
     try {
-      const response = await axios.post(`${API_URL}/api/ai/generate-quiz`, {
+      const response = await axios.post(`${API_URL}/api/ai/generate`, {
         topic,
         numQuestions,
         difficulty
@@ -69,7 +69,7 @@ export const QuizProvider = ({ children }) => {
   const createSession = async (quizId) => {
   try {
     const response = await axios.post(
-      `${API_URL}/api/sessions/create`,
+      `${API_URL}/api/sessions`,
       { quizId },
       {
         headers: {
