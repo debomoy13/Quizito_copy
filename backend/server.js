@@ -2192,6 +2192,62 @@ app.get("/api/analytics/user/:userId", authenticate, async (req, res) => {
   }
 });
 
+// Get global leaderboard
+app.get("/api/leaderboard", async (req, res) => {
+  try {
+    const { timeFilter = "allTime", limit = 100 } = req.query;
+
+    // Get all users with their stats
+    const users = await User.find()
+      .select("username stats location")
+      .sort({ "stats.totalScore": -1 })
+      .limit(parseInt(limit));
+
+    // Calculate leaderboard data
+    const leaderboard = users.map((user, index) => ({
+      _id: user._id,
+      username: user.username,
+      stats: {
+        totalScore: user.stats?.totalScore || 0,
+        streak: user.stats?.streak || 0,
+        accuracy: user.stats?.accuracy || 0,
+        quizzesTaken: user.stats?.quizzesTaken || 0
+      },
+      location: user.location || "Global",
+      rank: index + 1
+    }));
+
+    // Calculate aggregate stats
+    const totalPlayers = users.length;
+    const avgAccuracy = users.length > 0
+      ? users.reduce((sum, u) => sum + (u.stats?.accuracy || 0), 0) / users.length
+      : 0;
+    const avgResponseTime = users.length > 0
+      ? users.reduce((sum, u) => sum + (u.stats?.avgResponseTime || 0), 0) / users.length
+      : 0;
+    const quizzesPlayed = users.length > 0
+      ? users.reduce((sum, u) => sum + (u.stats?.quizzesTaken || 0), 0)
+      : 0;
+
+    res.json({
+      success: true,
+      leaderboard,
+      stats: {
+        totalPlayers,
+        avgAccuracy: avgAccuracy.toFixed(2),
+        avgResponseTime: avgResponseTime.toFixed(2),
+        quizzesPlayed
+      }
+    });
+  } catch (error) {
+    logger.error("Leaderboard error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch leaderboard"
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 15. SOCKET.IO REAL-TIME EVENTS (FIXED)
 // ---------------------------------------------------------------------------
