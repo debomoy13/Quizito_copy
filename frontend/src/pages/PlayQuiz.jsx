@@ -62,25 +62,25 @@ const PlayQuiz = () => {
     
     socketRef.current = socket;
     
-    // First, check if room exists
-    socket.emit('check-room', { roomCode });
-    
-    // Room exists, now join
-    socket.on('room-info', (roomInfo) => {
-      socket.emit('join-room', {
-        roomCode,
-        username,
-        userId
+    // Authenticate first
+    socket.emit('authenticate', {
+      token: localStorage.getItem('quizito_token')
+    });
+
+    // After authentication, join session
+    socket.on('authenticated', () => {
+      socket.emit('join-session', {
+        roomCode
       });
     });
-    
+
     // Successfully joined
-    socket.on('joined-room', (data) => {
+    socket.on('session-joined', (data) => {
       setGameState(prev => ({
         ...prev,
         status: 'waiting',
-        roomInfo: data.roomInfo,
-        players: data.players
+        roomInfo: data.session,
+        players: data.session.participants || []
       }));
     });
     
@@ -103,18 +103,33 @@ const PlayQuiz = () => {
       startTimer(data.question.timeLimit || 30);
     });
     
-    // Answer result
-    socket.on('answer-result', (data) => {
+    // Answer feedback
+    socket.on('answer-feedback', (data) => {
       setGameState(prev => ({
         ...prev,
         status: 'feedback',
         isCorrect: data.isCorrect,
         feedbackData: data,
         showFeedback: true,
-        score: data.isCorrect ? prev.score + data.points : prev.score
+        score: data.isCorrect ? prev.score + (data.points || 10) : prev.score
       }));
-      
+
       // Auto-clear feedback after 3 seconds
+      setTimeout(() => {
+        setGameState(prev => ({ ...prev, showFeedback: false }));
+      }, 3000);
+    });
+
+    // When time runs out for a question
+    socket.on('question-time-up', (data) => {
+      setGameState(prev => ({
+        ...prev,
+        status: 'feedback',
+        feedbackData: data,
+        showFeedback: true
+      }));
+
+      // Wait a bit then show next question
       setTimeout(() => {
         setGameState(prev => ({ ...prev, showFeedback: false }));
       }, 3000);
@@ -128,68 +143,93 @@ const PlayQuiz = () => {
       }));
     });
     
-    // Player joined/left
-    socket.on('player-joined', (player) => {
+    // Participant joined/left
+    socket.on('participant-joined', (data) => {
       setGameState(prev => ({
         ...prev,
-        players: [...prev.players, player]
+        players: [...prev.players, data.participant]
       }));
-      
+
       NotificationCenter.add({
         type: 'info',
-        message: `${player.username} joined`,
+        message: `${data.participant?.username || 'A player'} joined`,
         duration: 2000
       });
     });
-    
-    socket.on('player-left', (playerId) => {
+
+    socket.on('participant-left', (data) => {
       setGameState(prev => ({
         ...prev,
-        players: prev.players.filter(p => p.id !== playerId)
+        players: prev.players.filter(p => p.userId !== data.participantId)
       }));
     });
+
+    // Session update (new participants)
+    socket.on('session-updated', (data) => {
+      if (data.session && data.session.participants) {
+        setGameState(prev => ({
+          ...prev,
+          players: data.session.participants
+        }));
+      }
+    });
     
+    // Quiz completed
+    socket.on('quiz-completed', (data) => {
+      setGameState(prev => ({
+        ...prev,
+        status: 'ended'
+      }));
+    });
+
     // Quiz ended
     socket.on('quiz-ended', (data) => {
       setGameState(prev => ({
         ...prev,
         status: 'ended',
-        leaderboard: data.finalScores
+        leaderboard: data.finalLeaderboard || data.participants || []
       }));
-      
+
       // Navigate to results after delay
       setTimeout(() => {
         navigate('/results', {
           state: {
             roomCode,
-            scores: data.finalScores,
+            scores: data.finalLeaderboard || data.participants || [],
             playerScore: gameState.score,
             totalQuestions: gameState.totalQuestions
           }
         });
-      }, 5000);
+      }, 3000);
     });
     
     // Errors
-    socket.on('room-not-found', () => {
-      NotificationCenter.add({
-        type: 'error',
-        message: 'Room not found',
-        duration: 5000
-      });
-      setTimeout(() => navigate('/'), 3000);
+    socket.on('error', (data) => {
+      const errorMsg = typeof data === 'string' ? data : data?.message || 'Connection error';
+      if (errorMsg.includes('Session not found') || errorMsg.includes('Room')) {
+        NotificationCenter.add({
+          type: 'error',
+          message: 'Room not found',
+          duration: 5000
+        });
+        setTimeout(() => navigate('/'), 3000);
+      } else {
+        NotificationCenter.add({
+          type: 'error',
+          message: errorMsg,
+          duration: 3000
+        });
+      }
     });
     
-    socket.on('quiz-started', () => {
-      setGameState(prev => ({ ...prev, status: 'waiting' }));
-    });
-    
-    socket.on('error', (errorMsg) => {
-      NotificationCenter.add({
-        type: 'error',
-        message: errorMsg,
-        duration: 5000
-      });
+    socket.on('countdown', (data) => {
+      if (data.count === 1) {
+        NotificationCenter.add({
+          type: 'info',
+          message: 'Quiz starting!',
+          duration: 1000
+        });
+      }
     });
     
     return () => {
@@ -203,36 +243,37 @@ const PlayQuiz = () => {
     let timeLeft = duration;
     const timer = setInterval(() => {
       timeLeft--;
-      setGameState(prev => ({ ...prev, timer: timeLeft }));
-      
-      if (timeLeft <= 0) {
-        clearInterval(timer);
-        // Auto-submit if no answer selected
-        if (!gameState.selectedOption && gameState.status === 'question') {
-          handleOptionSelect(null);
+      setGameState(prev => {
+        const newState = { ...prev, timer: timeLeft };
+
+        if (timeLeft <= 0) {
+          clearInterval(timer);
         }
-      }
+
+        return newState;
+      });
     }, 1000);
-    
+
     return () => clearInterval(timer);
   };
   
   const handleOptionSelect = (optionIndex) => {
     if (gameState.selectedOption !== null || gameState.status !== 'question') return;
-    
-    const selectedOption = optionIndex !== null ? String.fromCharCode(65 + optionIndex) : null;
-    
+    if (!gameState.currentQuestion || !gameState.currentQuestion.options) return;
+
+    const selectedOption = gameState.currentQuestion.options[optionIndex]?.text || null;
+
     setGameState(prev => ({ ...prev, selectedOption: optionIndex }));
-    
+
     // Calculate time taken
-    const timeTaken = 30 - gameState.timer;
-    
+    const timeTaken = (gameState.currentQuestion?.timeLimit || 30) - gameState.timer;
+
     // Send answer to server
     socketRef.current.emit('submit-answer', {
       roomCode,
       questionIndex: gameState.questionIndex,
-      selectedOption,
-      timeTaken
+      answer: selectedOption,
+      timeTaken: Math.max(0, timeTaken)
     });
   };
   
