@@ -7,20 +7,14 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000'
 
 const AuthContext = createContext()
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext)
 
 export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(localStorage.getItem('quizito_token'))
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [token, setToken] = useState(localStorage.getItem('quizito_token'))
 
-  // Set axios default headers
+  // 🔥 Fix: Apply axios header IMMEDIATELY
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
@@ -29,62 +23,46 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token])
 
-  // Verify token on mount
+  // 🔥 Verify token AFTER axios header is set
   useEffect(() => {
-    const verifyToken = async () => {
-      if (token) {
-        try {
-          const response = await axios.get(`${API_URL}/api/auth/me`)
-          setUser(response.data.user)
-        } catch (error) {
-          console.error('Token verification failed:', error)
-          localStorage.removeItem('quizito_token')
-          setToken(null)
-          setUser(null)
-        }
+    const verify = async () => {
+      if (!token) {
+        setLoading(false)
+        return
       }
+
+      try {
+        const res = await axios.get(`${API_URL}/api/auth/me`)
+        setUser(res.data.user)
+      } catch (err) {
+        console.error('Auth verify failed:', err)
+        localStorage.removeItem('quizito_token')
+        setToken(null)
+        setUser(null)
+      }
+
       setLoading(false)
     }
 
-    verifyToken()
+    verify()
   }, [token])
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
-        email,
-        password
-      })
+      const res = await axios.post(`${API_URL}/api/auth/login`, { email, password })
 
-      const { token: newToken, user } = response.data
+      const newToken = res.data.token
+      const newUser = res.data.user
+
       localStorage.setItem('quizito_token', newToken)
       setToken(newToken)
-      setUser(user)
-      toast.success('Welcome back!')
-      return { success: true }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Login failed')
-      return { success: false, error: error.response?.data?.message }
-    }
-  }
+      setUser(newUser)
 
-  const register = async (username, email, password) => {
-    try {
-      const response = await axios.post(`${API_URL}/api/auth/register`, {
-        username,
-        email,
-        password
-      })
-
-      const { token: newToken, user } = response.data
-      localStorage.setItem('quizito_token', newToken)
-      setToken(newToken)
-      setUser(user)
-      toast.success('Account created successfully!')
+      toast.success('Logged in successfully!')
       return { success: true }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Registration failed')
-      return { success: false, error: error.response?.data?.message }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Login failed')
+      return { success: false }
     }
   }
 
@@ -92,26 +70,18 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('quizito_token')
     setToken(null)
     setUser(null)
-    toast.success('Logged out successfully')
-  }
-
-  const updateUser = (updatedUser) => {
-    setUser(updatedUser)
-  }
-
-  const value = {
-    user,
-    token,
-    loading,
-    login,
-    register,
-    logout,
-    updateUser,
-    isAuthenticated: !!user
+    toast.success('Logged out')
   }
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
+      logout,
+      isAuthenticated: !!user
+    }}>
       {children}
     </AuthContext.Provider>
   )
